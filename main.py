@@ -79,7 +79,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code = status.HTTP_401_UNAUTHORIZED,
-        details = "Could not validate credentials.",
+        detail = "Could not validate credentials.",
         headers = {"WWW-Authenticate": "Bearer"},
     )
     try:
@@ -142,7 +142,7 @@ def get_project_stats(project_id: int, current_user: models.User = Depends(get_c
     if not project:
         raise HTTPException(
             status_code = 404,
-            details = "Project not found."
+            detail = "Project not found."
         )
     now = datetime.utcnow()
     start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
