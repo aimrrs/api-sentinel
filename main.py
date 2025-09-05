@@ -1,18 +1,17 @@
-import os
-from datetime import datetime, timedelta
-from typing import Optional
-
-from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
+from fastapi import Depends, FastAPI, HTTPException, status, Header
 from passlib.context import CryptContext
-from pydantic import BaseModel
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
+from .database import SessionLocal
 from sqlalchemy.sql import func
-
+from dotenv import load_dotenv
+from jose import JWTError, jwt
+from pydantic import BaseModel
+from typing import Optional
 from . import models
-from .database import SessionLocal, engine
+import secrets
+import os
 
 load_dotenv()
 
@@ -20,7 +19,6 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-# Security contexts and schemes
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
@@ -28,7 +26,7 @@ app = FastAPI(
     title="API Sentinel Backend",
     description="The core API for the API Sentinel service.",
     version="0.3.0",
-)
+    )
 
 def get_db():
     db = SessionLocal()
@@ -51,6 +49,18 @@ class TokenData(BaseModel):
 class UsageCreate(BaseModel):
     cost: float
     usage_metadata: dict
+
+class ProjectCreate(BaseModel):
+    name: str
+
+class ProjectResponse(BaseModel):
+    id: int
+    name: str
+    owner_id: int
+    sentinel_key: str
+
+    class Config:
+        from_attributes = True
 
 class ProjectStats(BaseModel):
     project_id: int
@@ -135,6 +145,60 @@ def report_usage(usage: UsageCreate, x_sentinel_key: str = Header(...), db: Sess
     db.add(new_log)
     db.commit()
     return
+
+@app.post("/projects", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED, tags=["Projects"])
+def create_project(project: ProjectCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    new_project = models.Project(name=project.name, owner_id=current_user.id)
+    db.add(new_project)
+    db.commit()
+    db.refresh(new_project)
+    key_string = f"api-sentinel_pk_{secrets.token_urlsafe(16)}"
+    new_key = models.SentinelKey(key_string=key_string, project_id=new_project.id)
+    db.add(new_key)
+    db.commit()
+    db.refresh(new_key)
+    return {
+        "id": new_project.id,
+        "name": new_project.name,
+        "owner_id": new_project.owner_id,
+        "sentinel_key": new_key.key_string
+    }
+
+@app.delete("/projects/{project_id}", status_code=status.HTTP_200_OK, tags=["Projects"])
+def delete_project(project_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    project_to_delete = db.query(models.Project).filter(
+        models.Project.id == project_id,
+        models.Project.owner_id == current_user.id
+    ).first()
+
+    if not project_to_delete:
+        raise HTTPException(
+            status_code = 404,
+            detail = "Project not found."
+        )
+    
+    db.delete(project_to_delete)
+    db.commit()
+    return {"message": f"Project '{project_to_delete.name}' and all its data have been successfully deleted."}
+
+@app.get("/projects", response_model=list[ProjectResponse], tags=["Projects"])
+def read_user_projects(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    projects = db.query(models.Project).filter(models.Project.owner_id == current_user.id).all()
+    response_list = []
+    for project in projects:
+        response_list.append({
+            "id": project.id,
+            "name": project.name,
+            "owner_id": project.owner_id,
+            "sentinel_key": project.sentinel_key.key_string if project.sentinel_key else "N/A"
+        })
+    return response_list
+
+@app.delete("/users/me", status_code=status.HTTP_200_OK, tags=["Users"])
+def delete_current_user(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    db.delete(current_user)
+    db.commit()
+    return {"message": "Your account and all associated data have been successfully deleted."}
 
 @app.get("/v1/projects/{projects_id}/stats", response_model=ProjectStats, tags=["Dashboard"])
 def get_project_stats(project_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
