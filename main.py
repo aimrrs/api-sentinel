@@ -70,6 +70,11 @@ class ProjectStats(BaseModel):
     usage_start_date: datetime
     usage_end_date: datetime
 
+class SentinelKeyDetails(BaseModel):
+    project_id: int
+    monthly_budget: int
+    current_usage: float
+
 def get_password_hash(password):
     return pwd_context.hash(password)
 
@@ -132,7 +137,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 @app.post("/v1/usage", status_code=status.HTTP_202_ACCEPTED, tags=["SDK"])
 def report_usage(usage: UsageCreate, x_sentinel_key: str = Header(...), db: Session = Depends(get_db)):
     sentinel_key = db.query(models.SentinelKey).filter(models.SentinelKey.key_string == x_sentinel_key).first()
-    if not sentinel_key or not sentinel_key.is_active():
+    if not sentinel_key or not sentinel_key.is_active:
         raise HTTPException(
             status_code = 401,
             details = "Invalid or missing API key.",
@@ -145,6 +150,26 @@ def report_usage(usage: UsageCreate, x_sentinel_key: str = Header(...), db: Sess
     db.add(new_log)
     db.commit()
     return
+
+@app.get("/keys/verify", response_model=SentinelKeyDetails, tags=["SDK"])
+def get_key_details(x_sentinel_key: str = Header(...), db: Session = Depends(get_db)):
+    sentinel_key = db.query(models.SentinelKey).filter(models.SentinelKey.key_string == x_sentinel_key).first()
+    if not sentinel_key or not sentinel_key.is_active:
+        raise HTTPException(
+            status_code = 401,
+            detail = "Invalid or missing API key."
+        )
+    now = datetime.utcnow()
+    start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    usage_sum = db.query(func.sum(models.UsageLog.cost_rupees)).filter(
+        models.UsageLog.sentinel_key_id == sentinel_key.id,
+        models.UsageLog.timestamp >= start_of_month,
+    ).scalar()
+    return {
+        "project_id": sentinel_key.project_id,
+        "monthly_budget": sentinel_key.monthly_budget_rupees,
+        "current_usage": usage_sum or 0.0
+    }
 
 @app.post("/projects", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED, tags=["Projects"])
 def create_project(project: ProjectCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
