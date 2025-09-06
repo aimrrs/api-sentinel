@@ -40,3 +40,12 @@ class UsageLog(Base):
     usage_metadata = Column(JSONB)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     sentinel_key = relationship("SentinelKey", back_populates="usage_logs")
+
+class ApiPricing(Base):
+    __tablename__ = "api_pricing"
+    id = Column(Integer, primary_key=True)
+    api_name = Column(String, index=True, nullable=False)
+    model_name = Column(String, unique=True, nullable=False)
+    input_cost_per_million_usd = Column(Float, nullable=False)
+    output_cost_per_million_usd = Column(Float, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
