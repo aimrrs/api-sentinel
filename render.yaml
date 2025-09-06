@@ -1,20 +1,22 @@
+# This version follows the official Render Blueprint specification.
+
+# 1. Define all the services (your application code)
 services:
-  # 1. The FastAPI Web Service
   - type: web
     name: api-sentinel-backend
     runtime: python
-    plan: free # Use the free instance type
+    plan: free
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn api-sentinel-backend.main:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: SECRET_KEY
-        generateValue: true # Render will automatically generate a secure secret key
+        generateValue: true
       - key: DATABASE_URL
         fromDatabase:
-          name: api-sentinel-db
+          name: api-sentinel-db # This links to the database defined below
           property: connectionString
 
-  # 2. The PostgreSQL Database
-  - type: postgres
-    name: api-sentinel-db
-    plan: free # Use the free database tier
+# 2. Define all the databases in a separate, top-level section
+databases:
+  - name: api-sentinel-db
+    plan: free
