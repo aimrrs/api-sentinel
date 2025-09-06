@@ -15,6 +15,6 @@ services:
           property: connectionString
 
   # 2. The PostgreSQL Database
-  - type: psql
+  - type: postgres
     name: api-sentinel-db
     plan: free # Use the free database tier
