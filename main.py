@@ -41,7 +41,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://192.168.0.130:3000", "http://127.0.0.1:3000"], # Allows your frontend to connect
+    allow_origins=["http://localhost:3000", 
+                   "http://127.0.0.1:3000",
+                   "https://api-sentinel-dashboard.vercel.app" 
+    ],
     allow_credentials=True,
     allow_methods=["*"], # Allows all methods (GET, POST, etc.)
     allow_headers=["*"], # Allows all headers
