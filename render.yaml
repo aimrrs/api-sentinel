@@ -7,7 +7,7 @@ services:
     runtime: python
     plan: free
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    startCommand: "python setupdb.py && uvicorn main:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: SECRET_KEY
         generateValue: true
