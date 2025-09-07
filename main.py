@@ -4,13 +4,13 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from .database import SessionLocal
+from database import SessionLocal
 from sqlalchemy.sql import func
 from dotenv import load_dotenv
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from typing import Optional
-from . import models
+import models
 import requests
 import secrets
 import os
