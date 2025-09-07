@@ -1,5 +1,5 @@
-from .database import engine, Base
-from . import models
+from database import engine, Base
+import models
 
 print("[ API - Sentinel ] Connecting to the database and creating tables...")
 
