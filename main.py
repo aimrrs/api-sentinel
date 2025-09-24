@@ -119,6 +119,9 @@ class ProjectAnalytics(BaseModel):
     average_cost_per_request: float
     usage_last_30_days:list[DailyUsage]
 
+class BudgetUpdate(BaseModel):
+    new_budget: int
+
 def fetch_and_cache_exchange_rate():
     global exchange_rate_cache
     print("[API - SENTINEl] Fetching latest USD->INR exchange rate...")
@@ -414,3 +417,19 @@ def get_project_analytics(project_id: int, current_user: models.User = Depends(g
         "average_cost_per_request": total_cost / total_requests if total_requests > 0 else 0,
         "usage_last_30_days": [{"date": str(row.date), "cost": row.cost} for row in daily_usage_data]
     }
+
+@app.patch("/projects/{project_id}/budget", status_code=status.HTTP_200_OK, tags=["Projects"])
+def update_project_budget(project_id: int, budget_update: BudgetUpdate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Updates the monthly budget for a specific project owned by the current user.
+    """
+    # Find the project and verify ownership
+    project = db.query(models.Project).filter(models.Project.id == project_id, models.Project.owner_id == current_user.id).first()
+    if not project or not project.sentinel_key:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    # Update the budget on the associated SentinelKey object
+    project.sentinel_key.monthly_budget_rupees = budget_update.new_budget
+    db.commit()
+    
+    return {"message": f"Budget for project '{project.name}' updated to ₹{budget_update.new_budget}."}
