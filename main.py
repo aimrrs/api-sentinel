@@ -110,6 +110,15 @@ class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
 
+class DailyUsage(BaseModel):
+    date: str
+    cost: float
+
+class ProjectAnalytics(BaseModel):
+    total_requests: int
+    average_cost_per_request: float
+    usage_last_30_days:list[DailyUsage]
+
 def fetch_and_cache_exchange_rate():
     global exchange_rate_cache
     print("[API - SENTINEl] Fetching latest USD->INR exchange rate...")
@@ -374,3 +383,34 @@ def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db))
     db.commit()
 
     return {"message": "Your password has been successfully reset."}
+
+@app.get("/v1/projects/{project_id}/analytics", response_model=ProjectAnalytics, tags=["Dashboard"])
+def get_project_analytics(project_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    project = db.query(models.Project).filter(models.Project.id == project_id, models.Project.owner_id == current_user.id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    
+    # Query to get usage grouped by day
+    daily_usage_data = db.query(
+        func.date(models.UsageLog.timestamp).label("date"),
+        func.sum(models.UsageLog.cost_rupees).label("cost")
+    ).filter(
+        models.UsageLog.sentinel_key_id == project.sentinel_key.id,
+        models.UsageLog.timestamp >= thirty_days_ago
+    ).group_by(
+        func.date(models.UsageLog.timestamp)
+    ).order_by(
+        func.date(models.UsageLog.timestamp)
+    ).all()
+    
+    # Query for total requests and average cost
+    total_requests = db.query(models.UsageLog).filter(models.UsageLog.sentinel_key_id == project.sentinel_key.id).count()
+    total_cost = db.query(func.sum(models.UsageLog.cost_rupees)).filter(models.UsageLog.sentinel_key_id == project.sentinel_key.id).scalar() or 0
+
+    return {
+        "total_requests": total_requests,
+        "average_cost_per_request": total_cost / total_requests if total_requests > 0 else 0,
+        "usage_last_30_days": [{"date": str(row.date), "cost": row.cost} for row in daily_usage_data]
+    }
