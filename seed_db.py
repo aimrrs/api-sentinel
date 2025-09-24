@@ -36,6 +36,54 @@ pricing_data = [
         "input_cost_per_million_usd": 0.20,
         "output_cost_per_million_usd": 0.30,
     },
+    {
+        "api_name": "openai",
+        "model_name": "gemma-7b-it",
+        "input_cost_per_million_usd": 0.80,
+        "output_cost_per_million_usd": 1.20,
+    },
+    {
+        "api_name": "openai",
+        "model_name": "eleutherai/llemma_7b",
+        "input_cost_per_million_usd": 0.80,
+        "output_cost_per_million_usd": 1.20,
+    },
+    {
+        "api_name": "openai",
+        "model_name": "google/gemma-7b-it",
+        "input_cost_per_million_usd": 0.80,
+        "output_cost_per_million_usd": 1.20,
+    },
+    {
+        "api_name": "openai",
+        "model_name": "google/gemma-3n-e2b-it:free",
+        "input_cost_per_million_usd": 0.80,
+        "output_cost_per_million_usd": 1.20,
+    },
+    {
+        "api_name": "openai",
+        "model_name": "llama3-8b-8192",
+        "input_cost_per_million_usd": 0.5,
+        "output_cost_per_million_usd": 1.30,
+    },
+    {
+        "api_name": "openai", # It's still OpenAI-compatible
+        "model_name": "llama3-70b-8192", # <-- The new, current, and powerful model
+        "input_cost_per_million_usd": 0.60,
+        "output_cost_per_million_usd": 1.20,
+    },
+    {
+        "api_name": "openai",
+        "model_name": "gemma-7b-it", # <-- The stable, available Groq model
+        "input_cost_per_million_usd": 1.20,
+        "output_cost_per_million_usd": 0.50,
+    },
+    {
+        "api_name": "openai", # OpenAI-compatible
+        "model_name": "openai/gpt-oss-20b", # <-- The official model from your successful test
+        "input_cost_per_million_usd": 1.20,
+        "output_cost_per_million_usd": 0.30,
+    },
 ]
 
 try:

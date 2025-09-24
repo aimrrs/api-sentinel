@@ -8,11 +8,12 @@ from database import SessionLocal
 from sqlalchemy.sql import func
 from dotenv import load_dotenv
 from jose import JWTError, jwt
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional
 import models
 import requests
 import secrets
+import resend
 import os
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -41,9 +42,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", 
-                   "http://127.0.0.1:3000",
-                   "https://api-sentinel-dashboard.vercel.app" 
+    allow_origins=["https://api-sentinel-dashboard.vercel.app" 
     ],
     allow_credentials=True,
     allow_methods=["*"], # Allows all methods (GET, POST, etc.)
@@ -103,6 +102,13 @@ class PricingOut(BaseModel):
     model_name: str
     input_cost_per_million_usd: float
     output_cost_per_million_usd: float
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
 
 def fetch_and_cache_exchange_rate():
     global exchange_rate_cache
@@ -318,3 +324,53 @@ def get_api_pricing(api_name: str, db: Session = Depends(get_db)):
     if not pricing_data:
         raise HTTPException(status_code=404, detail="Pricing information not found for this API.")
     return pricing_data
+
+@app.post("/auth/forgot-password", status_code=status.HTTP_200_OK, tags=["Authentication"])
+def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == request.email).first()
+    if not user:
+        return {"message": "If an account with that email exists, a password reset link has been sent."}
+
+    token = secrets.token_urlsafe(32)
+    reset_token = models.PasswordResetToken(
+        user_id=user.id,
+        token=token,
+        expires_at=datetime.utcnow() + timedelta(hours=1)
+    )
+    db.add(reset_token)
+    db.commit()
+
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    reset_url = f"https://api-sentinel-dashboard.vercel.app/reset-password/{token}"
+    
+    try:
+        params = {
+            "from": "onboarding@resend.dev",
+            "to": [user.email],
+            "subject": "Reset Your API Sentinel Password",
+            "html": f"<p>Hi,</p><p>You requested a password reset. Click the link below to set a new password:</p>"
+                    f"<a href='{reset_url}'>Reset Password</a>"
+                    f"<p>This link will expire in one hour.</p>"
+        }
+        resend.Emails.send(params)
+    except Exception as e:
+        print(f"ERROR: Could not send password reset email. {e}")
+    
+    return {"message": "If an account with that email exists, a password reset link has been sent."}
+
+
+@app.post("/auth/reset-password", status_code=status.HTTP_200_OK, tags=["Authentication"])
+def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+    reset_token = db.query(models.PasswordResetToken).filter(models.PasswordResetToken.token == request.token).first()
+    if not reset_token or reset_token.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Invalid or expired password reset token.")
+
+    user = db.query(models.User).filter(models.User.id == reset_token.user_id).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid token.")
+    
+    user.hashed_password = get_password_hash(request.new_password)
+    db.delete(reset_token)
+    db.commit()
+
+    return {"message": "Your password has been successfully reset."}
