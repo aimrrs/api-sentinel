@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from database import SessionLocal
 from sqlalchemy.sql import func
+from sqlalchemy import cast, Integer
 from dotenv import load_dotenv
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
@@ -121,6 +122,16 @@ class ProjectAnalytics(BaseModel):
 
 class BudgetUpdate(BaseModel):
     new_budget: int
+
+class ModelUsageAnalytics(BaseModel):
+    model_name: str
+    total_requests: int
+    total_input_tokens: int
+    total_output_tokens: int
+    total_cost: float
+
+    class Config:
+        from_attributes = True
 
 def fetch_and_cache_exchange_rate():
     global exchange_rate_cache
@@ -433,3 +444,36 @@ def update_project_budget(project_id: int, budget_update: BudgetUpdate, current_
     db.commit()
     
     return {"message": f"Budget for project '{project.name}' updated to ₹{budget_update.new_budget}."}
+
+@app.get("/v1/projects/{project_id}/model-analytics", response_model=list[ModelUsageAnalytics], tags=["Dashboard"])
+def get_project_model_analytics(project_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Provides a detailed breakdown of usage and cost per model for a given project
+    over the last 30 days.
+    """
+    project = db.query(models.Project).filter(models.Project.id == project_id, models.Project.owner_id == current_user.id).first()
+    if not project or not project.sentinel_key:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    
+    # This powerful query aggregates data directly from the JSONB field.
+    model_analytics_data = db.query(
+        models.UsageLog.usage_metadata['model'].astext.label("model_name"),
+        func.count(models.UsageLog.id).label("total_requests"),
+        func.sum(cast(models.UsageLog.usage_metadata['input_tokens'], Integer)).label("total_input_tokens"),
+        func.sum(cast(models.UsageLog.usage_metadata['output_tokens'], Integer)).label("total_output_tokens"),
+        func.sum(models.UsageLog.cost_rupees).label("total_cost")
+    ).filter(
+        models.UsageLog.sentinel_key_id == project.sentinel_key.id,
+        models.UsageLog.timestamp >= thirty_days_ago,
+        # Only include logs that have the necessary OpenAI metadata
+        models.UsageLog.usage_metadata.has_key('model')
+    ).group_by(
+        "model_name"
+    ).order_by(
+        func.sum(models.UsageLog.cost_rupees).desc()
+    ).all()
+
+    return model_analytics_data
+
