@@ -2,7 +2,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi import Depends, FastAPI, HTTPException, status, Header
 from apscheduler.schedulers.background import BackgroundScheduler
 from passlib.context import CryptContext
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from database import SessionLocal
 from sqlalchemy.sql import func
@@ -362,7 +362,7 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
 @app.post("/auth/reset-password", status_code=status.HTTP_200_OK, tags=["Authentication"])
 def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
     reset_token = db.query(models.PasswordResetToken).filter(models.PasswordResetToken.token == request.token).first()
-    if not reset_token or reset_token.expires_at < datetime.utcnow():
+    if not reset_token or reset_token.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Invalid or expired password reset token.")
 
     user = db.query(models.User).filter(models.User.id == reset_token.user_id).first()
