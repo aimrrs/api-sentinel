@@ -43,7 +43,9 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://api-sentinel-dashboard.vercel.app" 
+    allow_origins=["https://api-sentinel-dashboard.vercel.app",
+                   "www.apisentinel.co.in",
+                   "apisentinel.co.in"
     ],
     allow_credentials=True,
     allow_methods=["*"], # Allows all methods (GET, POST, etc.)
